@@ -1,0 +1,14 @@
+{
+  "ok_link_fsync": "ok",
+  "ok_drain_fsync": "ok",
+  "ok_wait_cqe": "ok",
+  "ok_atomic_replace": "ok",
+  "ok_read_outside_chain": "ok",
+  "ok_rewrite_after_failure": "ok",
+  "bug_fsync_unlinked": "bug",
+  "bug_cancel_ignored": "bug",
+  "bug_rename_before_fsync": "bug",
+  "bug_rename_no_dirsync": "bug",
+  "bug_fsync_eio_ignored": "bug",
+  "bug_fsync_retry_after_eio": "bug"
+}

@@ -1,0 +1,185 @@
+{
+  "format": "uring-crash corpus v1",
+  "notes": "12 protocolos de commit minimos. Cada record ocupa 1024 bytes (2 sectores de 512). Los fds nombran archivos que existen y estan durables antes del protocolo.",
+  "protocols": [
+    {
+      "name": "ok_link_fsync",
+      "files": {"db": "db"},
+      "records": {"r1": {"fd": "db", "off": 0, "check": "db"}},
+      "steps": [
+        {"submit": [
+          {"id": "w1", "op": "write", "record": "r1", "flags": ["link"]},
+          {"id": "f1", "op": "fsync", "fd": "db"}
+        ]},
+        {"wait": ["f1"]},
+        {"ack": {"records": ["r1"], "requires_ok": ["w1", "f1"]}}
+      ]
+    },
+    {
+      "name": "ok_drain_fsync",
+      "files": {"db": "db"},
+      "records": {
+        "r1": {"fd": "db", "off": 0, "check": "db"},
+        "r2": {"fd": "db", "off": 1024, "check": "db"}
+      },
+      "steps": [
+        {"submit": [
+          {"id": "w1", "op": "write", "record": "r1"},
+          {"id": "w2", "op": "write", "record": "r2"},
+          {"id": "f1", "op": "fsync", "fd": "db", "flags": ["drain"]}
+        ]},
+        {"wait": ["f1"]},
+        {"ack": {"records": ["r1", "r2"], "requires_ok": ["w1", "w2", "f1"]}}
+      ]
+    },
+    {
+      "name": "ok_wait_cqe",
+      "files": {"db": "db"},
+      "records": {"r1": {"fd": "db", "off": 0, "check": "db"}},
+      "steps": [
+        {"submit": [{"id": "w1", "op": "write", "record": "r1"}]},
+        {"wait": ["w1"]},
+        {"submit": [{"id": "f1", "op": "fsync", "fd": "db"}]},
+        {"wait": ["f1"]},
+        {"ack": {"records": ["r1"], "requires_ok": ["w1", "f1"]}}
+      ]
+    },
+    {
+      "name": "ok_atomic_replace",
+      "files": {"tmp": "db.tmp", "db": "db"},
+      "records": {"r1": {"fd": "tmp", "off": 0, "check": "db"}},
+      "steps": [
+        {"submit": [
+          {"id": "w1", "op": "write", "record": "r1", "flags": ["link"]},
+          {"id": "f1", "op": "fsync", "fd": "tmp"}
+        ]},
+        {"wait": ["f1"]},
+        {"submit": [
+          {"id": "mv", "op": "rename", "from": "db.tmp", "to": "db", "flags": ["link"]},
+          {"id": "fd", "op": "fsync_dir"}
+        ]},
+        {"wait": ["fd"]},
+        {"ack": {"records": ["r1"], "requires_ok": ["w1", "f1", "mv", "fd"]}}
+      ]
+    },
+    {
+      "name": "ok_read_outside_chain",
+      "files": {"db": "db"},
+      "records": {"r1": {"fd": "db", "off": 0, "check": "db"}},
+      "steps": [
+        {"submit": [
+          {"id": "rd", "op": "read", "fd": "db", "off": 8192, "len": 4096, "may_fail": true},
+          {"id": "w1", "op": "write", "record": "r1", "flags": ["link"]},
+          {"id": "f1", "op": "fsync", "fd": "db"}
+        ]},
+        {"wait": ["rd", "f1"]},
+        {"ack": {"records": ["r1"], "requires_ok": ["w1", "f1"]}}
+      ]
+    },
+    {
+      "name": "ok_rewrite_after_failure",
+      "files": {"db": "db"},
+      "records": {"r1": {"fd": "db", "off": 0, "check": "db"}},
+      "steps": [
+        {"submit": [
+          {"id": "w1", "op": "write", "record": "r1", "flags": ["link"]},
+          {"id": "f1", "op": "fsync", "fd": "db"}
+        ]},
+        {"wait": ["f1"]},
+        {"submit_if_failed": {"cond": "f1", "sqes": [
+          {"id": "w1b", "op": "write", "record": "r1", "flags": ["link"]},
+          {"id": "f1b", "op": "fsync", "fd": "db", "no_fault": true}
+        ]}},
+        {"wait": ["f1b"]},
+        {"ack": {"records": ["r1"], "requires_ok": ["w1b", "f1b"]}}
+      ]
+    },
+    {
+      "name": "bug_fsync_unlinked",
+      "files": {"db": "db"},
+      "records": {"r1": {"fd": "db", "off": 0, "check": "db"}},
+      "steps": [
+        {"submit": [
+          {"id": "w1", "op": "write", "record": "r1"},
+          {"id": "f1", "op": "fsync", "fd": "db"}
+        ]},
+        {"wait": ["w1", "f1"]},
+        {"ack": {"records": ["r1"], "requires_ok": ["w1", "f1"]}}
+      ]
+    },
+    {
+      "name": "bug_cancel_ignored",
+      "files": {"db": "db"},
+      "records": {"r1": {"fd": "db", "off": 0, "check": "db"}},
+      "steps": [
+        {"submit": [
+          {"id": "rd", "op": "read", "fd": "db", "off": 8192, "len": 4096, "may_fail": true, "flags": ["link"]},
+          {"id": "w1", "op": "write", "record": "r1", "flags": ["link"]},
+          {"id": "f1", "op": "fsync", "fd": "db"}
+        ]},
+        {"wait": ["f1"]},
+        {"ack": {"records": ["r1"], "requires_ok": []}}
+      ]
+    },
+    {
+      "name": "bug_rename_before_fsync",
+      "files": {"tmp": "db.tmp", "db": "db"},
+      "records": {"r1": {"fd": "tmp", "off": 0, "check": "db"}},
+      "steps": [
+        {"submit": [{"id": "w1", "op": "write", "record": "r1"}]},
+        {"wait": ["w1"]},
+        {"submit": [
+          {"id": "mv", "op": "rename", "from": "db.tmp", "to": "db", "flags": ["link"]},
+          {"id": "fd", "op": "fsync_dir"}
+        ]},
+        {"wait": ["fd"]},
+        {"ack": {"records": ["r1"], "requires_ok": ["w1", "mv", "fd"]}}
+      ]
+    },
+    {
+      "name": "bug_rename_no_dirsync",
+      "files": {"tmp": "db.tmp", "db": "db"},
+      "records": {"r1": {"fd": "tmp", "off": 0, "check": "db"}},
+      "steps": [
+        {"submit": [
+          {"id": "w1", "op": "write", "record": "r1", "flags": ["link"]},
+          {"id": "f1", "op": "fsync", "fd": "tmp"}
+        ]},
+        {"wait": ["f1"]},
+        {"submit": [{"id": "mv", "op": "rename", "from": "db.tmp", "to": "db"}]},
+        {"wait": ["mv"]},
+        {"ack": {"records": ["r1"], "requires_ok": ["w1", "f1", "mv"]}}
+      ]
+    },
+    {
+      "name": "bug_fsync_eio_ignored",
+      "files": {"db": "db"},
+      "records": {"r1": {"fd": "db", "off": 0, "check": "db"}},
+      "steps": [
+        {"submit": [
+          {"id": "w1", "op": "write", "record": "r1", "flags": ["link"]},
+          {"id": "f1", "op": "fsync", "fd": "db"}
+        ]},
+        {"wait": ["f1"]},
+        {"ack": {"records": ["r1"], "requires_ok": ["w1"]}}
+      ]
+    },
+    {
+      "name": "bug_fsync_retry_after_eio",
+      "files": {"db": "db"},
+      "records": {"r1": {"fd": "db", "off": 0, "check": "db"}},
+      "steps": [
+        {"submit": [
+          {"id": "w1", "op": "write", "record": "r1", "flags": ["link"]},
+          {"id": "f1", "op": "fsync", "fd": "db"}
+        ]},
+        {"wait": ["f1"]},
+        {"submit_if_failed": {"cond": "f1", "sqes": [
+          {"id": "f2", "op": "fsync", "fd": "db", "no_fault": true}
+        ]}},
+        {"wait": ["f2"]},
+        {"ack": {"records": ["r1"], "requires_ok": ["w1", "f2"]}}
+      ]
+    }
+  ]
+}
