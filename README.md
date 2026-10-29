@@ -17,6 +17,17 @@ Corpus pre-registrado de 12 protocolos (6 correctos, 6 con bug), fijado en
 el primer commit con sus sha256 en `corpus/PREREGISTRO.sha256` antes de que
 existiera el explorador. Un test verifica que los hashes no cambiaron.
 
+El pre-registro vale **por el orden de los commits**: el corpus (5f67d09)
+es anterior al commit que agrega el explorador (c3da9f2). Se comprueba con:
+
+```
+git log --reverse --format='%h %ad %s' --date=iso-strict
+git merge-base --is-ancestor 5f67d09 c3da9f2 && echo "corpus anterior al explorador"
+```
+
+Los sha256 del corpus se publicaron en la sala de coordinación recién
+**después** de medir; no hubo publicación externa previa del hash.
+
 ```
 cargo run --release --bin uring-crash -- corpus corpus/protocols.json corpus/expected.json
 ```
@@ -86,6 +97,10 @@ record the application acknowledged is intact.
 A pre-registered corpus of 12 protocols (6 correct, 6 buggy), committed in
 the first commit with sha256 hashes in `corpus/PREREGISTRO.sha256` before the
 explorer existed. A test checks the hashes did not change.
+The pre-registration holds **by commit order only** (corpus 5f67d09 precedes
+the explorer commit c3da9f2; verify with the `git log` and
+`git merge-base --is-ancestor` commands above). The corpus sha256 hashes were
+shared in the coordination room only **after** measuring.
 
 | Metric | Result |
 |---|---|
